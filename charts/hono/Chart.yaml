@@ -1,0 +1,52 @@
+#
+# Copyright (c) 2019 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License 2.0 which is available at
+# http://www.eclipse.org/legal/epl-2.0
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+apiVersion: v2
+name: hono
+description: |
+  Eclipse Hono™ provides remote service interfaces for connecting large numbers of IoT devices to a back end and
+  interacting with them in a uniform way regardless of the device communication protocol.
+version: 2.6.2
+# Version of Hono being deployed by the chart
+appVersion: 2.6.0
+keywords:
+- iot-chart
+- IoT
+- connectivity
+- messaging
+- Kafka
+home: https://www.eclipse.org/hono/
+sources:
+- https://github.com/eclipse-hono/hono
+icon: https://eclipse.dev/hono/img/hono-logo_image.svg
+maintainers:
+- name: dejanb
+  email: dbosanac@redhat.com
+- name: sophokles73
+  email: kai.hudalla@bosch.io
+dependencies:
+- name: "prometheus"
+  version: "^14.x"
+  repository: "https://prometheus-community.github.io/helm-charts"
+  condition: "prometheus.createInstance"
+- name: "grafana"
+  version: "^6.x"
+  repository: "https://grafana.github.io/helm-charts"
+  condition: "grafana.enabled"
+- name: "mongodb"
+  repository: "oci://registry-1.docker.io/bitnamicharts"
+  version: "~13.x"
+  condition: "mongodb.createInstance"
+- name: "kafka"
+  repository: "oci://registry-1.docker.io/bitnamicharts"
+  version: "^26.8"
+  condition: "kafkaMessagingClusterExample.enabled"

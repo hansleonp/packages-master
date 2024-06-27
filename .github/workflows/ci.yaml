@@ -1,0 +1,167 @@
+# Copyright (c) 2019, 2023 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License 2.0 which is available at
+# http://www.eclipse.org/legal/epl-2.0
+#
+# SPDX-License-Identifier: EPL-2.0
+
+name: ci
+
+env:
+  CONFIG_OPTION_CHART_TESTING: "--config .github/ct.yaml"
+  VERSION_CHART_TESTING: "v3.5.1"
+  VERSION_HELM: "v3.9.2"
+  VERSION_PYTHON: "3.7"
+on:
+  pull_request:
+    paths:
+      - 'charts/**'
+      - 'packages/**'
+
+jobs:
+  lint-bash-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Lint Bash scripts
+        uses: docker://koalaman/shellcheck-alpine:v0.9.0
+        with:
+          args: .github/lint-scripts.sh
+
+  lint-chart:
+    runs-on: ubuntu-latest
+    needs: lint-bash-scripts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Fetch history for chart testing
+        run: git fetch --prune --unshallow
+      - name: Set up Helm
+        uses: azure/setup-helm@v3.5
+        with:
+          version: ${{ env.VERSION_HELM }}
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.VERSION_PYTHON }}
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.2.1
+        with:
+          version: ${{ env.VERSION_CHART_TESTING }}
+      - name: Run chart-testing (lint)
+        run: ct lint ${{ env.CONFIG_OPTION_CHART_TESTING }}
+
+  kubeval-chart:
+    runs-on: ubuntu-latest
+    needs: lint-chart
+    strategy:
+      matrix:
+        # the versions supported by kubeval are the ones for
+        # which a folder exists at
+        # https://github.com/yannh/kubernetes-json-schema/
+        k8s:
+          - v1.25.13
+          - v1.26.8
+          - v1.27.5
+          - v1.28.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Fetch history for chart testing
+        run: git fetch --prune --unshallow
+      - name: Set up Helm
+        uses: azure/setup-helm@v3.5
+        with:
+          version: ${{ env.VERSION_HELM }}
+      - name: Run kubeval
+        env:
+          KUBERNETES_VERSION: ${{ matrix.k8s }}
+        run: .github/kubeval.sh
+
+  install-chart:
+    name: install-chart
+    runs-on: ubuntu-latest
+    needs:
+      - lint-chart
+      - kubeval-chart
+    strategy:
+      matrix:
+        k8s:
+        # the versions supported by chart-testing are the tags
+        # available for the docker.io/kindest/node image
+        # https://hub.docker.com/r/kindest/node/tags
+          - v1.25.11
+          - v1.26.6
+          - v1.27.3
+          - v1.28.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Fetch history for chart testing
+        run: git fetch --prune --unshallow
+      - name: Set up Helm
+        uses: azure/setup-helm@v3.5
+        with:
+          version: ${{ env.VERSION_HELM }}
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.VERSION_PYTHON }}
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.2.1
+        with:
+          version: ${{ env.VERSION_CHART_TESTING }}
+      - name: Check for changed charts
+        id: list-changed
+        run: |
+          changed=$(ct list-changed ${{ env.CONFIG_OPTION_CHART_TESTING }})
+          if [[ -n "$changed" ]]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+      - name: Create kind ${{ matrix.k8s }} cluster
+        uses: helm/kind-action@v1.8.0
+        with:
+          version: v0.20.0
+          config: .github/kind-config.yaml
+          node_image: kindest/node:${{ matrix.k8s }}
+        if: ${{ steps.list-changed.outputs.changed == 'true' }}
+      - name: Deploy ingress controller
+        if: ${{ steps.list-changed.outputs.changed == 'true' }}
+        run: |
+          # upgrade after: https://github.com/kubernetes/ingress-nginx/issues/6245
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.0.3/deploy/static/provider/kind/deploy.yaml
+      - name: Wait for the ingress controller to become ready
+        if: ${{ steps.list-changed.outputs.changed == 'true' }}
+        run: |
+          kubectl wait --namespace ingress-nginx \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=180s
+          kubectl -n ingress-nginx set resources deployment ingress-nginx-controller --requests=cpu=0
+          sleep 120
+          kubectl wait --namespace ingress-nginx \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=180s
+      - if: ${{ failure() }}
+        run: |
+          kubectl -n ingress-nginx describe pods
+      - name: Describe nodes
+        if: ${{ steps.list-changed.outputs.changed == 'true' }}
+        run: |
+          kubectl describe nodes
+      - name: Run CI chart customization
+        if: ${{ steps.list-changed.outputs.changed == 'true' }}
+        run: .github/chart-ci-init.sh
+      - name: Run chart-testing (install)
+        run: ct install ${{ env.CONFIG_OPTION_CHART_TESTING }}
+
+      - name: Record logs
+        if: ${{ failure() }}
+        run: |
+          # drop after: https://github.com/kubernetes/ingress-nginx/issues/6245
+          kubectl -n ingress-nginx describe pods
+          kubectl -n ingress-nginx logs deployment/ingress-nginx-controller

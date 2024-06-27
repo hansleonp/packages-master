@@ -1,0 +1,29 @@
+iot.ditto:
+  shortName: Ditto
+  fullName: Eclipse Ditto™
+  projectUrl: https://eclipse.org/ditto
+
+iot.hawkbit:
+  shortName: Hawkbit
+  fullName: Eclipse Hawkbit™
+  projectUrl: https://eclipse.org/hawkbit
+
+iot.hono:
+  shortName: Hono
+  fullName: Eclipse Hono™
+  projectUrl: https://eclipse.org/hono
+
+iot.streamsheets:
+  shortName: Streamsheets
+  fullName: Eclipse Streamsheets™
+  projectUrl: https://eclipse.org/streamsheets
+
+iot.kura:
+  shortName: Kura
+  fullName: Eclipse Kura™
+  projectUrl: https://eclipse.org/kura
+
+iot.mosquitto:
+  shortName: Mosquitto
+  fullName: Eclipse Mosquitto
+  projectUrl: https://eclipse.org/mosquitto

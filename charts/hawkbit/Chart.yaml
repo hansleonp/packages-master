@@ -1,0 +1,42 @@
+# Copyright (c) 2020, 2023 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License 2.0 which is available at
+# http://www.eclipse.org/legal/epl-2.0
+#
+# SPDX-License-Identifier: EPL-2.0
+---
+apiVersion: v2
+version: 1.6.0
+appVersion: "0.3.0M6-mysql"
+description: |
+   Eclipse hawkBit™ is a domain independent back-end framework for rolling out software updates
+   to constrained edge devices as well as more powerful controllers and gateways connected to
+   IP based networking infrastructure.
+name: hawkbit
+keywords:
+  - iot-chart
+home: https://www.eclipse.org/hawkbit/
+sources:
+- https://github.com/eclipse/hawkbit
+- https://github.com/eclipse/packages
+icon: https://www.eclipse.org/hawkbit/images/hawkbit_icon.png
+maintainers:
+- name: monotek
+  email: andre.bauer@kiwigrid.com
+- name: axdotl
+  email: axel.koehler@kiwigrid.com
+- name: ctron
+  email: ctron@dentrassi.de
+dependencies:
+- name: mysql
+  version: ^9.x
+  repository: "oci://registry-1.docker.io/bitnamicharts"
+  condition: mysql.enabled
+- name: rabbitmq
+  version: ^10.x
+  repository: "oci://registry-1.docker.io/bitnamicharts"
+  condition: rabbitmq.enabled

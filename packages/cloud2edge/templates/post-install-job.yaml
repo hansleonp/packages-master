@@ -1,0 +1,73 @@
+#
+# Copyright (c) 2020, 2023 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License 2.0 which is available at
+# http://www.eclipse.org/legal/epl-2.0
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%s" .Release.Name "post-install" | quote }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion }}
+    helm.sh/chart: {{ template "c2e.chart" . }}
+  annotations:
+    # This is what defines this resource as a hook. Without this line, the
+    # job is considered part of the release.
+    helm.sh/hook: post-install
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      name: {{ printf "%s-%s" .Release.Name "post-install" | quote }}
+      labels:
+        app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+        app.kubernetes.io/instance: {{ .Release.Name | quote }}
+        helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: "post-install"
+        image: "curlimages/curl:8.2.1"
+        command:
+        - /bin/sh
+        - -c
+        - |
+          cd /var/run/c2e/post-install-data/
+          ./post-install.sh
+        volumeMounts:
+        - name: post-install-data
+          mountPath: "/var/run/c2e/post-install-data"
+          readOnly: true
+        - name: ditto-gw-users
+          mountPath: "/var/run/c2e/ditto-gw-users"
+          readOnly: true
+          {{- if and .Values.hono.kafkaMessagingClusterExample .Values.hono.kafkaMessagingClusterExample.enabled }}
+        - name: kafka-connection-cert
+          mountPath: "/var/run/c2e/kafka-connection-cert"
+          readOnly: true
+          {{- end}}
+      volumes:
+      - name: post-install-data
+        secret:
+          secretName: {{ printf "%s-%s" .Release.Name "post-install-data" }}
+          defaultMode: 0555
+      - name: ditto-gw-users
+        secret:
+          secretName: {{ printf "%s-%s" ( include "c2e.ditto.fullname" . ) "gateway-secret" }}
+      {{- if and .Values.hono.kafkaMessagingClusterExample .Values.hono.kafkaMessagingClusterExample.enabled }}
+      - name: kafka-connection-cert
+        secret:
+          secretName: {{ printf "%s-%s" (include "c2e.kafka.fullname" .) "example-keys" }}
+      {{- end}}
